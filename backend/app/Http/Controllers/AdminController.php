@@ -37,12 +37,21 @@ class AdminController extends Controller
         }
         $totalCitizens = $citizenQuery->where('role', 'citizen')->count();
 
-        // Recent applications
-        $recentQuery = Application::with(['user', 'assistanceType']);
+        // Super Admin Specific: Total Barangays
+        $totalTenants = 0;
         if ($request->user()->role === 'super_admin') {
-            $recentQuery = Application::withoutGlobalScopes()->with(['user', 'assistanceType']);
+            $totalTenants = \App\Models\Tenant::count();
         }
-        $recentApplications = $recentQuery->orderBy('created_at', 'desc')->limit(10)->get();
+
+        // Recent applications (Only for Barangay Admins)
+        $recentApplications = [];
+        if ($request->user()->role !== 'super_admin') {
+            $recentApplications = Application::with(['user', 'assistanceType'])
+                ->where('tenant_id', $tenantId)
+                ->orderBy('created_at', 'desc')
+                ->limit(10)
+                ->get();
+        }
 
         // Monthly trend (last 6 months)
         $monthlyQuery = Application::query();
@@ -83,6 +92,7 @@ class AdminController extends Controller
                 'released' => $released,
                 'rejected' => $rejected,
                 'total_citizens' => $totalCitizens,
+                'total_barangays' => $totalTenants,
             ],
             'recent_applications' => $recentApplications,
             'monthly_trend' => $monthlyTrend,
@@ -91,8 +101,15 @@ class AdminController extends Controller
     }
 
     /**
-     * Generate reports data.
+     * Get all assistance types for the admin's tenant.
      */
+    public function assistanceTypes(Request $request): JsonResponse
+    {
+        $types = AssistanceType::orderBy('name')->get();
+
+        return response()->json(['assistance_types' => $types]);
+    }
+
     public function reports(Request $request): JsonResponse
     {
         $validated = $request->validate([
@@ -201,6 +218,64 @@ class AdminController extends Controller
         return response()->json([
             'message' => 'Assistance type updated.',
             'assistance_type' => $type,
+        ]);
+    }
+
+    /**
+     * List all users for the admin's tenant.
+     */
+    public function users(Request $request): JsonResponse
+    {
+        $tenantId = $request->user()->tenant_id;
+        
+        $users = User::where('tenant_id', $tenantId)
+            ->where('id', '!=', $request->user()->id) // Don't list self if you want to prevent self-role edits here
+            ->orderBy('name')
+            ->get();
+
+        return response()->json(['users' => $users]);
+    }
+
+    /**
+     * Update user role.
+     */
+    public function updateUserRole(Request $request, int $id): JsonResponse
+    {
+        $validated = $request->validate([
+            'role' => 'required|string|in:citizen,barangay_admin',
+        ]);
+
+        $user = User::where('id', $id)
+            ->where('tenant_id', $request->user()->tenant_id)
+            ->firstOrFail();
+
+        $user->role = $validated['role'];
+        $user->save();
+
+        return response()->json([
+            'message' => "User role updated to {$validated['role']}.",
+            'user' => $user
+        ]);
+    }
+
+    /**
+     * Get application history for a specific user.
+     */
+    public function userApplicationHistory(Request $request, int $id): JsonResponse
+    {
+        // Ensure user belongs to same tenant
+        $user = User::where('id', $id)
+            ->where('tenant_id', $request->user()->tenant_id)
+            ->firstOrFail();
+
+        $applications = Application::where('user_id', $id)
+            ->with('assistanceType')
+            ->orderBy('created_at', 'desc')
+            ->get();
+
+        return response()->json([
+            'user' => $user,
+            'applications' => $applications
         ]);
     }
 }

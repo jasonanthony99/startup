@@ -23,7 +23,10 @@ class User extends Authenticatable
         'is_senior_citizen',
         'is_pwd',
         'is_low_income',
+        'profile_photo',
     ];
+
+    protected $appends = ['profile_photo_url'];
 
     protected $hidden = [
         'password',
@@ -78,5 +81,14 @@ class User extends Authenticatable
             return null;
         }
         return $this->date_of_birth->age;
+    }
+
+    public function getProfilePhotoUrlAttribute(): ?string
+    {
+        if ($this->profile_photo) {
+            return '/storage/' . $this->profile_photo;
+        }
+
+        return null;
     }
 }

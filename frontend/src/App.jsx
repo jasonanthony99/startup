@@ -12,6 +12,15 @@ import AdminDashboard from './pages/AdminDashboard';
 import QueueManagement from './pages/QueueManagement';
 import ReportsPage from './pages/ReportsPage';
 import TransparencyDashboard from './pages/TransparencyDashboard';
+import TenantManagement from './pages/TenantManagement';
+import AssistanceTypeManagement from './pages/AssistanceTypeManagement';
+import AdminMessages from './pages/AdminMessages';
+import UserManagement from './pages/UserManagement';
+import Profile from './pages/Profile';
+import RequestDocument from './pages/RequestDocument';
+import MyDocuments from './pages/MyDocuments';
+import AdminDocumentRequests from './pages/AdminDocumentRequests';
+import DocumentTypeManagement from './pages/DocumentTypeManagement';
 
 // Layout
 import DashboardLayout from './components/layout/DashboardLayout';
@@ -77,6 +86,29 @@ function App() {
           </DashboardLayout>
         </ProtectedRoute>
       } />
+      <Route path="/citizen/request-document" element={
+        <ProtectedRoute roles={['citizen']}>
+          <DashboardLayout>
+            <RequestDocument />
+          </DashboardLayout>
+        </ProtectedRoute>
+      } />
+      <Route path="/citizen/documents" element={
+        <ProtectedRoute roles={['citizen']}>
+          <DashboardLayout>
+            <MyDocuments />
+          </DashboardLayout>
+        </ProtectedRoute>
+      } />
+
+      {/* Common Routes */}
+      <Route path="/profile" element={
+        <ProtectedRoute roles={['citizen', 'barangay_admin', 'super_admin']}>
+          <DashboardLayout>
+            <Profile />
+          </DashboardLayout>
+        </ProtectedRoute>
+      } />
 
       {/* Admin Routes */}
       <Route path="/admin" element={
@@ -87,16 +119,58 @@ function App() {
         </ProtectedRoute>
       } />
       <Route path="/admin/queue" element={
-        <ProtectedRoute roles={['barangay_admin', 'super_admin']}>
+        <ProtectedRoute roles={['barangay_admin']}>
           <DashboardLayout>
             <QueueManagement />
           </DashboardLayout>
         </ProtectedRoute>
       } />
       <Route path="/admin/reports" element={
-        <ProtectedRoute roles={['barangay_admin', 'super_admin']}>
+        <ProtectedRoute roles={['barangay_admin']}>
           <DashboardLayout>
             <ReportsPage />
+          </DashboardLayout>
+        </ProtectedRoute>
+      } />
+      <Route path="/admin/users" element={
+        <ProtectedRoute roles={['barangay_admin']}>
+          <DashboardLayout>
+            <UserManagement />
+          </DashboardLayout>
+        </ProtectedRoute>
+      } />
+      <Route path="/admin/messages" element={
+        <ProtectedRoute roles={['barangay_admin']}>
+          <DashboardLayout>
+            <AdminMessages />
+          </DashboardLayout>
+        </ProtectedRoute>
+      } />
+      <Route path="/admin/assistance-types" element={
+        <ProtectedRoute roles={['barangay_admin']}>
+          <DashboardLayout>
+            <AssistanceTypeManagement />
+          </DashboardLayout>
+        </ProtectedRoute>
+      } />
+      <Route path="/admin/document-requests" element={
+        <ProtectedRoute roles={['barangay_admin']}>
+          <DashboardLayout>
+            <AdminDocumentRequests />
+          </DashboardLayout>
+        </ProtectedRoute>
+      } />
+      <Route path="/admin/document-types" element={
+        <ProtectedRoute roles={['barangay_admin']}>
+          <DashboardLayout>
+            <DocumentTypeManagement />
+          </DashboardLayout>
+        </ProtectedRoute>
+      } />
+      <Route path="/admin/tenants" element={
+        <ProtectedRoute roles={['super_admin']}>
+          <DashboardLayout>
+            <TenantManagement />
           </DashboardLayout>
         </ProtectedRoute>
       } />

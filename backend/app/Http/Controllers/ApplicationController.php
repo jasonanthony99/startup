@@ -6,6 +6,7 @@ use App\Models\Application;
 use App\Models\AssistanceType;
 use App\Models\Notification;
 use App\Models\StatusLog;
+use App\Models\User;
 use App\Services\PriorityCalculator;
 use App\Services\QueueManager;
 use Illuminate\Http\Request;
@@ -110,14 +111,31 @@ class ApplicationController extends Controller
             'remarks' => 'Application submitted.',
         ]);
 
-        // Create notification
+        // Create notification for the citizen
         Notification::create([
             'user_id' => $user->id,
             'tenant_id' => $user->tenant_id,
             'title' => 'Application Submitted',
             'message' => "Your application {$referenceId} has been submitted successfully and is pending review.",
             'type' => 'status_update',
+            'redirect_url' => "/citizen?highlight={$application->id}",
         ]);
+
+        // Notify Barangay Admins
+        $admins = User::where('tenant_id', $user->tenant_id)
+            ->where('role', 'barangay_admin')
+            ->get();
+
+        foreach ($admins as $admin) {
+            Notification::create([
+                'user_id' => $admin->id,
+                'tenant_id' => $user->tenant_id,
+                'title' => 'New Application Received',
+                'message' => "A new application {$referenceId} has been submitted by {$user->name}.",
+                'type' => 'system',
+                'redirect_url' => "/admin?highlight={$application->id}",
+            ]);
+        }
 
         return response()->json([
             'message' => 'Application submitted successfully.',
@@ -229,6 +247,7 @@ class ApplicationController extends Controller
             'message' => "Your application {$application->reference_id} has been updated to: {$statusLabels[$validated['status']]}." .
                 ($validated['remarks'] ? " Remarks: {$validated['remarks']}" : ''),
             'type' => 'status_update',
+            'redirect_url' => "/citizen?highlight={$application->id}",
         ]);
 
         return response()->json([
@@ -245,5 +264,64 @@ class ApplicationController extends Controller
         $types = AssistanceType::where('is_active', true)->get();
 
         return response()->json(['assistance_types' => $types]);
+    }
+
+    /**
+     * Public method to get assistance types without authentication.
+     */
+    public function publicAssistanceTypes(): JsonResponse
+    {
+        $types = AssistanceType::where('is_active', true)
+            ->select('id', 'name')
+            ->get();
+
+        return response()->json(['assistance_types' => $types]);
+    }
+
+    /**
+     * Public search for application status by user name and assistance type.
+     */
+    public function trackSearch(Request $request): JsonResponse
+    {
+        $request->validate([
+            'name' => 'required|string|min:3',
+            'assistance_type_id' => 'required|exists:assistance_types,id',
+        ]);
+
+        $name = $request->name;
+        $typeId = $request->assistance_type_id;
+
+        $application = Application::withoutGlobalScopes()
+            ->with(['assistanceType', 'statusLogs'])
+            ->whereHas('user', function ($q) use ($name) {
+                $q->where('name', 'like', "%{$name}%");
+            })
+            ->where('assistance_type_id', $typeId)
+            ->orderBy('created_at', 'desc')
+            ->first();
+
+        if (!$application) {
+            return response()->json(['message' => 'Application not found with these details.'], 404);
+        }
+
+        return response()->json([
+            'application' => [
+                'reference_id' => $application->reference_id,
+                'status' => $application->status,
+                'priority_level' => $application->priority_level,
+                'queue_position' => $application->queue_position,
+                'assistance_type' => $application->assistanceType->name,
+                'submitted_at' => $application->created_at,
+                'reviewed_at' => $application->reviewed_at,
+                'status_history' => $application->statusLogs->map(function ($log) {
+                    return [
+                        'from' => $log->from_status,
+                        'to' => $log->to_status,
+                        'remarks' => $log->remarks,
+                        'date' => $log->created_at,
+                    ];
+                }),
+            ],
+        ]);
     }
 }

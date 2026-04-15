@@ -31,6 +31,8 @@ class TenantController extends Controller
     {
         $validated = $request->validate([
             'name' => 'required|string|max:255',
+            'city' => 'required|string|max:255',
+            'province' => 'required|string|max:255',
             'code' => 'required|string|max:50|unique:tenants,code',
             'address' => 'nullable|string|max:500',
             'contact_number' => 'nullable|string|max:20',
@@ -43,6 +45,8 @@ class TenantController extends Controller
         // Create tenant
         $tenant = Tenant::create([
             'name' => $validated['name'],
+            'city' => $validated['city'],
+            'province' => $validated['province'],
             'code' => Str::upper($validated['code']),
             'address' => $validated['address'] ?? null,
             'contact_number' => $validated['contact_number'] ?? null,
@@ -100,10 +104,14 @@ class TenantController extends Controller
     {
         $validated = $request->validate([
             'name' => 'sometimes|string|max:255',
+            'city' => 'sometimes|string|max:255',
+            'province' => 'sometimes|string|max:255',
             'address' => 'nullable|string|max:500',
             'contact_number' => 'nullable|string|max:20',
             'email' => 'nullable|email|max:255',
             'is_active' => 'sometimes|boolean',
+            'subscription_plan' => 'sometimes|string|in:free,monthly,yearly',
+            'subscription_expires_at' => 'nullable|date',
         ]);
 
         $tenant = Tenant::findOrFail($id);
@@ -113,6 +121,18 @@ class TenantController extends Controller
             'message' => 'Barangay updated successfully.',
             'tenant' => $tenant,
         ]);
+    }
+
+    /**
+     * Show subscription history for a tenant.
+     */
+    public function subscriptionHistory(int $id): JsonResponse
+    {
+        $history = \App\Models\SubscriptionPayment::where('tenant_id', $id)
+            ->orderBy('created_at', 'desc')
+            ->get();
+
+        return response()->json(['history' => $history]);
     }
 
     /**

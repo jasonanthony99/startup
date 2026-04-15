@@ -67,7 +67,7 @@ class TransparencyController extends Controller
     }
 
     /**
-     * Get released assistance records (public).
+     * Get recent assistance activity (public).
      */
     public function released(Request $request, string $tenantCode): JsonResponse
     {
@@ -77,15 +77,15 @@ class TransparencyController extends Controller
             return response()->json(['message' => 'Barangay not found.'], 404);
         }
 
-        $released = Application::withoutGlobalScopes()
+        $activity = Application::withoutGlobalScopes()
             ->where('tenant_id', $tenant->id)
-            ->where('status', 'released')
-            ->with('assistanceType')
-            ->select('id', 'reference_id', 'assistance_type_id', 'status', 'reviewed_at', 'created_at')
-            ->orderBy('reviewed_at', 'desc')
+            ->whereIn('status', ['under_review', 'approved', 'released', 'rejected'])
+            ->with(['assistanceType', 'user'])
+            ->select('id', 'user_id', 'reference_id', 'assistance_type_id', 'status', 'reviewed_at', 'updated_at', 'created_at')
+            ->orderBy('updated_at', 'desc')
             ->paginate($request->get('per_page', 20));
 
-        return response()->json($released);
+        return response()->json($activity);
     }
 
     /**

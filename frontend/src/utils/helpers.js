@@ -91,3 +91,18 @@ export function getInitials(name) {
     .toUpperCase()
     .slice(0, 2);
 }
+
+/**
+ * Mask an email address (e.g., j***e@example.com).
+ */
+export function maskEmail(email) {
+  if (!email) return '';
+  const [local, domain] = email.split('@');
+  if (!domain) return email;
+  
+  if (local.length <= 2) {
+    return local.charAt(0) + '***@' + domain;
+  }
+  
+  return local.charAt(0) + '***' + local.charAt(local.length - 1) + '@' + domain;
+}

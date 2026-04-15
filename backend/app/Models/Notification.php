@@ -15,6 +15,7 @@ class Notification extends Model
         'tenant_id',
         'title',
         'message',
+        'redirect_url',
         'type',
         'is_read',
     ];

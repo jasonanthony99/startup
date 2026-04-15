@@ -1,6 +1,8 @@
 import { useState, useEffect } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { adminAPI, applicationsAPI } from '../services/api';
 import { formatDate, getStatusConfig, getPriorityConfig } from '../utils/helpers';
+import { useAuth } from '../context/AuthContext';
 import { Bar, Doughnut } from 'react-chartjs-2';
 import {
   Chart as ChartJS, CategoryScale, LinearScale, BarElement,
@@ -11,21 +13,44 @@ import toast from 'react-hot-toast';
 ChartJS.register(CategoryScale, LinearScale, BarElement, Title, Tooltip, Legend, ArcElement);
 
 export default function AdminDashboard() {
+  const [searchParams, setSearchParams] = useSearchParams();
+  const { user } = useAuth();
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [statusModal, setStatusModal] = useState(null);
   const [statusForm, setStatusForm] = useState({ status: '', remarks: '' });
   const [updating, setUpdating] = useState(false);
 
+  const isSuperAdmin = user?.role === 'super_admin';
+
+  useEffect(() => { fetchDashboard(); }, []);
+
+  // Auto-open status modal from notification highlight
   useEffect(() => {
-    fetchDashboard();
-  }, []);
+    const highlightId = searchParams.get('highlight');
+    if (highlightId && data?.recent_applications?.length > 0) {
+      const match = data.recent_applications.find(a => a.id.toString() === highlightId);
+      if (match) {
+        setStatusModal(match);
+        setStatusForm({ status: '', remarks: '' });
+      }
+    }
+  }, [searchParams, data]);
+
+  // Close status modal and clear highlight from URL
+  const closeStatusModal = () => {
+    setStatusModal(null);
+    if (searchParams.has('highlight')) {
+      searchParams.delete('highlight');
+      setSearchParams(searchParams, { replace: true });
+    }
+  };
 
   const fetchDashboard = async () => {
     try {
       const res = await adminAPI.dashboard();
       setData(res.data);
-    } catch {
+    } catch (err) {
       toast.error('Failed to load dashboard.');
     } finally {
       setLoading(false);
@@ -38,7 +63,7 @@ export default function AdminDashboard() {
     try {
       await applicationsAPI.updateStatus(statusModal.id, statusForm);
       toast.success('Status updated successfully!');
-      setStatusModal(null);
+      closeStatusModal();
       setStatusForm({ status: '', remarks: '' });
       fetchDashboard();
     } catch (err) {
@@ -53,27 +78,15 @@ export default function AdminDashboard() {
 
   const { stats, recent_applications, monthly_trend, by_type } = data;
 
-  // Monthly chart data
   const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
   const monthlyChartData = {
     labels: monthly_trend?.map(m => months[m.month - 1]) || [],
     datasets: [
-      {
-        label: 'Total',
-        data: monthly_trend?.map(m => m.total) || [],
-        backgroundColor: 'rgba(13, 71, 161, 0.7)',
-        borderRadius: 6,
-      },
-      {
-        label: 'Approved',
-        data: monthly_trend?.map(m => m.approved_count) || [],
-        backgroundColor: 'rgba(16, 185, 129, 0.7)',
-        borderRadius: 6,
-      },
+      { label: 'Total', data: monthly_trend?.map(m => m.total) || [], backgroundColor: 'rgba(13, 71, 161, 0.7)', borderRadius: 6 },
+      { label: 'Approved', data: monthly_trend?.map(m => m.approved_count) || [], backgroundColor: 'rgba(16, 185, 129, 0.7)', borderRadius: 6 },
     ],
   };
 
-  // Type distribution chart
   const typeChartData = {
     labels: by_type?.map(t => t.name) || [],
     datasets: [{
@@ -86,6 +99,102 @@ export default function AdminDashboard() {
     }],
   };
 
+  /* ═══════════════════════════════════════════════════════════════════
+     SUPER ADMIN DASHBOARD
+     ═══════════════════════════════════════════════════════════════════ */
+  if (isSuperAdmin) {
+    return (
+      <div className="animate-fade-in">
+        <div style={{ marginBottom: 'var(--space-xl)' }}>
+          <h1 style={{ display: 'flex', alignItems: 'center', gap: '10px', margin: '0 0 4px' }}>
+            <span style={{ fontSize: '1.5rem' }}>🏛️</span> System Overview
+          </h1>
+          <p style={{ color: 'var(--text-tertiary)', margin: 0, fontSize: '0.9rem' }}>
+            Platform-wide statistics across all barangays
+          </p>
+        </div>
+
+        {/* Super Admin Stats */}
+        <div className="grid grid-4" style={{ marginBottom: 'var(--space-xl)' }}>
+          {[
+            { label: 'Active Barangays', count: stats.total_barangays || 0, icon: '🏢', gradient: 'linear-gradient(135deg, #6366f1, #8b5cf6)' },
+            { label: 'Total Citizens', count: stats.total_citizens || 0, icon: '👥', gradient: 'linear-gradient(135deg, #06b6d4, #0891b2)' },
+            { label: 'Total Applications', count: stats.total_applications || 0, icon: '📋', gradient: 'linear-gradient(135deg, #f59e0b, #d97706)' },
+            { label: 'Approved & Released', count: (stats.approved || 0) + (stats.released || 0), icon: '✅', gradient: 'linear-gradient(135deg, #10b981, #059669)' },
+          ].map(stat => (
+            <div key={stat.label} style={{
+              padding: '24px', borderRadius: '16px', background: 'white',
+              border: '1px solid var(--border-color)', position: 'relative', overflow: 'hidden'
+            }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                <div>
+                  <p style={{ fontSize: '0.82rem', color: 'var(--text-tertiary)', margin: '0 0 8px', fontWeight: '500' }}>{stat.label}</p>
+                  <h2 style={{ margin: 0, fontSize: '2rem', fontWeight: '700', color: 'var(--text-primary)' }}>{stat.count}</h2>
+                </div>
+                <div style={{
+                  width: '48px', height: '48px', borderRadius: '14px', background: stat.gradient,
+                  display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1.4rem',
+                  boxShadow: '0 4px 12px rgba(0,0,0,0.12)'
+                }}>{stat.icon}</div>
+              </div>
+            </div>
+          ))}
+        </div>
+
+        {/* Charts */}
+        <div className="grid grid-2" style={{ marginBottom: 'var(--space-xl)' }}>
+          <div className="card">
+            <div className="card-header"><div className="card-title">Application Trends (All Barangays)</div></div>
+            <div className="chart-container">
+              <Bar data={monthlyChartData} options={{
+                responsive: true, maintainAspectRatio: false,
+                plugins: { legend: { position: 'bottom' } },
+                scales: { y: { beginAtZero: true, ticks: { stepSize: 1 } } },
+              }} />
+            </div>
+          </div>
+          <div className="card">
+            <div className="card-header"><div className="card-title">Assistance Distribution</div></div>
+            <div className="chart-container" style={{ display: 'flex', justifyContent: 'center' }}>
+              <Doughnut data={typeChartData} options={{
+                responsive: true, maintainAspectRatio: false,
+                plugins: { legend: { position: 'bottom', labels: { boxWidth: 12, padding: 16 } } },
+                cutout: '60%',
+              }} />
+            </div>
+          </div>
+        </div>
+
+        {/* Status Breakdown */}
+        <div className="card">
+          <div style={{ padding: '4px 0' }}>
+            <h3 style={{ fontSize: '1.05rem', margin: '0 0 20px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+              📊 Application Status Breakdown
+            </h3>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: '12px' }}>
+              {[
+                { label: 'Pending', count: stats.pending || 0, bg: '#fef3c7', color: '#92400e', icon: '⏳' },
+                { label: 'Under Review', count: stats.under_review || 0, bg: '#dbeafe', color: '#1e40af', icon: '🔍' },
+                { label: 'Approved', count: stats.approved || 0, bg: '#dcfce7', color: '#166534', icon: '✅' },
+                { label: 'Released', count: stats.released || 0, bg: '#e0e7ff', color: '#3730a3', icon: '📦' },
+                { label: 'Rejected', count: stats.rejected || 0, bg: '#fee2e2', color: '#991b1b', icon: '❌' },
+              ].map(s => (
+                <div key={s.label} style={{ padding: '16px', borderRadius: '12px', background: s.bg, textAlign: 'center' }}>
+                  <div style={{ fontSize: '1.3rem', marginBottom: '6px' }}>{s.icon}</div>
+                  <div style={{ fontSize: '1.5rem', fontWeight: '700', color: s.color }}>{s.count}</div>
+                  <div style={{ fontSize: '0.78rem', color: s.color, fontWeight: '500', marginTop: '4px' }}>{s.label}</div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  /* ═══════════════════════════════════════════════════════════════════
+     BARANGAY ADMIN DASHBOARD
+     ═══════════════════════════════════════════════════════════════════ */
   return (
     <div className="animate-fade-in">
       <div className="page-header">
@@ -95,7 +204,6 @@ export default function AdminDashboard() {
         </div>
       </div>
 
-      {/* Stats Cards */}
       <div className="grid grid-4" style={{ marginBottom: 'var(--space-xl)' }}>
         {[
           { label: 'Total Applications', count: stats.total_applications, color: 'blue', icon: '📋' },
@@ -113,12 +221,9 @@ export default function AdminDashboard() {
         ))}
       </div>
 
-      {/* Charts */}
       <div className="grid grid-2" style={{ marginBottom: 'var(--space-xl)' }}>
         <div className="card">
-          <div className="card-header">
-            <div className="card-title">Monthly Trend</div>
-          </div>
+          <div className="card-header"><div className="card-title">Monthly Trend</div></div>
           <div className="chart-container">
             <Bar data={monthlyChartData} options={{
               responsive: true, maintainAspectRatio: false,
@@ -127,11 +232,8 @@ export default function AdminDashboard() {
             }} />
           </div>
         </div>
-
         <div className="card">
-          <div className="card-header">
-            <div className="card-title">By Assistance Type</div>
-          </div>
+          <div className="card-header"><div className="card-title">By Assistance Type</div></div>
           <div className="chart-container" style={{ display: 'flex', justifyContent: 'center' }}>
             <Doughnut data={typeChartData} options={{
               responsive: true, maintainAspectRatio: false,
@@ -142,7 +244,6 @@ export default function AdminDashboard() {
         </div>
       </div>
 
-      {/* Recent Applications */}
       <div className="card" style={{ padding: 0, overflow: 'hidden' }}>
         <div style={{ padding: 'var(--space-xl) var(--space-xl) 0' }}>
           <h3 style={{ fontSize: 'var(--font-size-lg)' }}>Recent Applications</h3>
@@ -151,13 +252,8 @@ export default function AdminDashboard() {
           <table className="data-table">
             <thead>
               <tr>
-                <th>Reference</th>
-                <th>Applicant</th>
-                <th>Type</th>
-                <th>Status</th>
-                <th>Priority</th>
-                <th>Date</th>
-                <th>Action</th>
+                <th>Reference</th><th>Applicant</th><th>Type</th>
+                <th>Status</th><th>Priority</th><th>Date</th><th>Action</th>
               </tr>
             </thead>
             <tbody>
@@ -166,25 +262,15 @@ export default function AdminDashboard() {
                   <td><code style={{ fontSize: '11px', color: 'var(--primary-500)' }}>{app.reference_id}</code></td>
                   <td>{app.user?.name || '—'}</td>
                   <td>{app.assistance_type?.name || '—'}</td>
-                  <td>
-                    <span className={`badge badge-dot badge-${getStatusConfig(app.status).color}`}>
-                      {getStatusConfig(app.status).label}
-                    </span>
-                  </td>
-                  <td>
-                    <span className={`badge badge-${getPriorityConfig(app.priority_level).color}`}>
-                      {getPriorityConfig(app.priority_level).label}
-                    </span>
-                  </td>
+                  <td><span className={`badge badge-dot badge-${getStatusConfig(app.status).color}`}>{getStatusConfig(app.status).label}</span></td>
+                  <td><span className={`badge badge-${getPriorityConfig(app.priority_level).color}`}>{getPriorityConfig(app.priority_level).label}</span></td>
                   <td>{formatDate(app.created_at)}</td>
                   <td>
                     {app.status !== 'released' && app.status !== 'rejected' && (
                       <button className="btn btn-primary btn-sm" onClick={() => {
                         setStatusModal(app);
                         setStatusForm({ status: '', remarks: '' });
-                      }}>
-                        Update
-                      </button>
+                      }}>Update</button>
                     )}
                   </td>
                 </tr>
@@ -194,13 +280,12 @@ export default function AdminDashboard() {
         </div>
       </div>
 
-      {/* Status Update Modal */}
       {statusModal && (
-        <div className="modal-backdrop" onClick={() => setStatusModal(null)}>
+        <div className="modal-backdrop" onClick={closeStatusModal}>
           <div className="modal" onClick={e => e.stopPropagation()}>
             <div className="modal-header">
               <h3>Update Status</h3>
-              <button className="modal-close" onClick={() => setStatusModal(null)}>✕</button>
+              <button className="modal-close" onClick={closeStatusModal}>✕</button>
             </div>
             <div className="modal-body">
               <p style={{ fontSize: 'var(--font-size-sm)', color: 'var(--text-muted)', marginBottom: 'var(--space-lg)' }}>
@@ -225,7 +310,7 @@ export default function AdminDashboard() {
               </div>
             </div>
             <div className="modal-footer">
-              <button className="btn btn-secondary" onClick={() => setStatusModal(null)}>Cancel</button>
+              <button className="btn btn-secondary" onClick={closeStatusModal}>Cancel</button>
               <button className="btn btn-primary" onClick={handleStatusUpdate} disabled={updating || !statusForm.status}>
                 {updating ? 'Updating...' : 'Update Status'}
               </button>

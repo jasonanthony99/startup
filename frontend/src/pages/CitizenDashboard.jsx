@@ -1,10 +1,11 @@
 import { useState, useEffect } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import { applicationsAPI } from '../services/api';
 import { formatDate, getStatusConfig, getPriorityConfig } from '../utils/helpers';
 import toast from 'react-hot-toast';
 
 export default function CitizenDashboard() {
+  const [searchParams, setSearchParams] = useSearchParams();
   const [applications, setApplications] = useState([]);
   const [loading, setLoading] = useState(true);
   const [statusFilter, setStatusFilter] = useState('all');
@@ -13,6 +14,24 @@ export default function CitizenDashboard() {
   useEffect(() => {
     fetchApplications();
   }, [statusFilter]);
+
+  // Handle auto-opening from notification highlight
+  useEffect(() => {
+    const highlightId = searchParams.get('highlight');
+    if (highlightId && applications.length > 0) {
+      const match = applications.find(a => a.id.toString() === highlightId);
+      if (match) setSelectedApp(match);
+    }
+  }, [searchParams, applications]);
+
+  // Close modal and clear highlight from URL
+  const closeModal = () => {
+    setSelectedApp(null);
+    if (searchParams.has('highlight')) {
+      searchParams.delete('highlight');
+      setSearchParams(searchParams, { replace: true });
+    }
+  };
 
   const fetchApplications = async () => {
     try {
@@ -147,7 +166,7 @@ export default function CitizenDashboard() {
 
       {/* Application Detail Modal */}
       {selectedApp && (
-        <div className="modal-backdrop" onClick={() => setSelectedApp(null)}>
+        <div className="modal-backdrop" onClick={closeModal}>
           <div className="modal" onClick={e => e.stopPropagation()} style={{ maxWidth: '600px' }}>
             <div className="modal-header">
               <div>
@@ -156,7 +175,7 @@ export default function CitizenDashboard() {
                   {selectedApp.reference_id}
                 </p>
               </div>
-              <button className="modal-close" onClick={() => setSelectedApp(null)}>✕</button>
+              <button className="modal-close" onClick={closeModal}>✕</button>
             </div>
             <div className="modal-body">
               <div className="grid grid-2" style={{ gap: 'var(--space-md)', marginBottom: 'var(--space-lg)' }}>

@@ -132,13 +132,45 @@ class AuthController extends Controller
             'is_senior_citizen' => 'nullable|boolean',
             'is_pwd' => 'nullable|boolean',
             'is_low_income' => 'nullable|boolean',
+            'profile_photo' => 'nullable|image|max:2048', // 2MB max
         ]);
 
-        $request->user()->update($validated);
+        $user = $request->user();
+
+        // Handle profile photo upload
+        if ($request->hasFile('profile_photo')) {
+            // Delete old photo if exists
+            if ($user->profile_photo) {
+                \Illuminate\Support\Facades\Storage::disk('public')->delete($user->profile_photo);
+            }
+            $path = $request->file('profile_photo')->store('profiles', 'public');
+            $validated['profile_photo'] = $path;
+        }
+
+        $user->update($validated);
 
         return response()->json([
             'message' => 'Profile updated successfully.',
-            'user' => $request->user()->fresh()->load('tenant'),
+            'user' => $user->fresh()->load('tenant'),
+        ]);
+    }
+
+    /**
+     * Change the authenticated user's password.
+     */
+    public function changePassword(Request $request): JsonResponse
+    {
+        $validated = $request->validate([
+            'current_password' => ['required', 'current_password'],
+            'password' => ['required', 'confirmed', Password::min(8)],
+        ]);
+
+        $request->user()->update([
+            'password' => Hash::make($validated['password']),
+        ]);
+
+        return response()->json([
+            'message' => 'Password changed successfully.',
         ]);
     }
 }

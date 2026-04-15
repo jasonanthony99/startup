@@ -1,7 +1,8 @@
 import { useState, useEffect } from 'react';
 import { useParams, Link } from 'react-router-dom';
+import { useAuth } from '../context/AuthContext';
 import { transparencyAPI } from '../services/api';
-import { getMonthName, formatDate } from '../utils/helpers';
+import { getMonthName, formatDate, getStatusConfig } from '../utils/helpers';
 import { Bar, Doughnut } from 'react-chartjs-2';
 import {
   Chart as ChartJS, CategoryScale, LinearScale, BarElement,
@@ -12,6 +13,7 @@ ChartJS.register(CategoryScale, LinearScale, BarElement, ArcElement, Title, Tool
 
 export default function TransparencyDashboard() {
   const { code } = useParams();
+  const { isAuthenticated, user } = useAuth();
   const [barangays, setBarangays] = useState([]);
   const [selectedCode, setSelectedCode] = useState(code || '');
   const [stats, setStats] = useState(null);
@@ -95,7 +97,10 @@ export default function TransparencyDashboard() {
     <div style={{ minHeight: '100vh', background: 'var(--bg-secondary)' }}>
       {/* Header */}
       <div className="transparency-header">
-        <Link to="/" style={{ color: 'rgba(255,255,255,0.7)', fontSize: 'var(--font-size-sm)', display: 'inline-block', marginBottom: 'var(--space-md)' }}>
+        <Link 
+          to={isAuthenticated ? (user?.role === 'citizen' ? '/citizen' : '/admin') : '/'} 
+          style={{ color: 'rgba(255,255,255,0.7)', fontSize: 'var(--font-size-sm)', display: 'inline-block', marginBottom: 'var(--space-md)' }}
+        >
           ← Back to Home
         </Link>
         <h1>🏛️ Transparency Dashboard</h1>
@@ -204,38 +209,45 @@ export default function TransparencyDashboard() {
               )}
             </div>
 
-            {/* Released Records */}
+            {/* Recent Activity */}
             <div className="card" style={{ padding: 0, overflow: 'hidden' }}>
               <div style={{ padding: 'var(--space-xl) var(--space-xl) 0' }}>
-                <h3 style={{ fontSize: 'var(--font-size-lg)' }}>Recently Released Assistance</h3>
+                <h3 style={{ fontSize: 'var(--font-size-lg)' }}>Recent Assistance Activity</h3>
                 <p style={{ fontSize: 'var(--font-size-sm)', color: 'var(--text-muted)' }}>
-                  Public record of distributed assistance
+                  Real-time public record of assistance application progress
                 </p>
               </div>
               {released.length === 0 ? (
                 <div style={{ padding: 'var(--space-xl)', textAlign: 'center', color: 'var(--text-muted)' }}>
-                  No released records yet.
+                  No recent activity yet.
                 </div>
               ) : (
                 <div className="data-table-wrapper" style={{ marginTop: 'var(--space-md)' }}>
                   <table className="data-table">
                     <thead>
                       <tr>
-                        <th>Reference ID</th>
+                        <th>Recipient Name</th>
                         <th>Assistance Type</th>
                         <th>Status</th>
-                        <th>Released Date</th>
+                        <th>Last Updated</th>
                       </tr>
                     </thead>
                     <tbody>
-                      {released.map(r => (
-                        <tr key={r.id}>
-                          <td><code style={{ fontSize: '11px' }}>{r.reference_id}</code></td>
-                          <td>{r.assistance_type?.name || '—'}</td>
-                          <td><span className="badge badge-dot badge-released">Released</span></td>
-                          <td>{formatDate(r.reviewed_at)}</td>
-                        </tr>
-                      ))}
+                      {released.map(r => {
+                        const status = getStatusConfig(r.status);
+                        return (
+                          <tr key={r.id}>
+                            <td style={{ fontWeight: 600 }}>{r.user?.name || '—'}</td>
+                            <td>{r.assistance_type?.name || '—'}</td>
+                            <td>
+                              <span className={`badge badge-dot badge-${status.color}`}>
+                                {status.label}
+                              </span>
+                            </td>
+                            <td>{formatDate(r.updated_at || r.created_at)}</td>
+                          </tr>
+                        );
+                      })}
                     </tbody>
                   </table>
                 </div>

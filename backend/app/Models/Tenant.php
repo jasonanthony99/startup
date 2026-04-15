@@ -11,16 +11,33 @@ class Tenant extends Model
 
     protected $fillable = [
         'name',
+        'city',
+        'province',
         'code',
         'address',
         'contact_number',
         'email',
         'is_active',
+        'subscription_plan',
+        'subscription_expires_at',
     ];
 
     protected $casts = [
         'is_active' => 'boolean',
+        'subscription_expires_at' => 'datetime',
     ];
+    
+    protected $appends = ['is_subscribed'];
+
+    public function getIsSubscribedAttribute()
+    {
+        return $this->subscription_expires_at && $this->subscription_expires_at->isFuture();
+    }
+
+    public function subscriptionPayments()
+    {
+        return $this->hasMany(SubscriptionPayment::class);
+    }
 
     public function users()
     {

@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import Sidebar from './Sidebar';
 import Navbar from './Navbar';
+import Chatbot from '../common/Chatbot';
 
 export default function DashboardLayout({ children }) {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
@@ -23,6 +24,7 @@ export default function DashboardLayout({ children }) {
           {children}
         </div>
       </div>
+      <Chatbot />
     </div>
   );
 }
